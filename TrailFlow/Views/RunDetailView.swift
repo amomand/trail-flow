@@ -9,7 +9,7 @@ struct RunDetailView: View {
 
     @State private var entry: RouteCache.Entry?
     @State private var splits: [Split] = []
-    @State private var elevation: [Double] = []
+    @State private var elevation: [MetricSample] = []
 
     var body: some View {
         ZStack {
@@ -26,7 +26,7 @@ struct RunDetailView: View {
                     }
                     if !elevation.isEmpty {
                         SectionHeader(text: "ELEVATION")
-                        elevationChart(values: elevation)
+                        elevationChart(samples: elevation)
                     }
                     if !splits.isEmpty {
                         SectionHeader(text: "SPLITS")
@@ -79,9 +79,10 @@ struct RunDetailView: View {
     }
 
     private func paceChart(buckets: [Double]) -> some View {
-        Chart {
-            ForEach(Array(buckets.enumerated()), id: \.offset) { idx, v in
-                LineMark(x: .value("i", idx), y: .value("pace", v))
+        let samples = paceSamples(from: buckets)
+        return Chart {
+            ForEach(samples) { sample in
+                LineMark(x: .value("km", sample.distanceKm), y: .value("pace", sample.value))
                     .foregroundStyle(theme.magenta)
             }
         }
@@ -95,17 +96,18 @@ struct RunDetailView: View {
                 }
             }
         }
-        .chartXAxis(.hidden)
+        .chartXAxis { distanceAxisMarks() }
+        .chartXScale(domain: 0...max(run.distanceKm, 0.1))
         .frame(height: 140)
         .terminalCard()
     }
 
-    private func elevationChart(values: [Double]) -> some View {
+    private func elevationChart(samples: [MetricSample]) -> some View {
         Chart {
-            ForEach(Array(values.enumerated()), id: \.offset) { idx, v in
-                AreaMark(x: .value("i", idx), y: .value("alt", v))
+            ForEach(samples) { sample in
+                AreaMark(x: .value("km", sample.distanceKm), y: .value("alt", sample.value))
                     .foregroundStyle(theme.orange.opacity(0.4))
-                LineMark(x: .value("i", idx), y: .value("alt", v))
+                LineMark(x: .value("km", sample.distanceKm), y: .value("alt", sample.value))
                     .foregroundStyle(theme.orange)
             }
         }
@@ -119,7 +121,8 @@ struct RunDetailView: View {
                 }
             }
         }
-        .chartXAxis(.hidden)
+        .chartXAxis { distanceAxisMarks() }
+        .chartXScale(domain: 0...max(run.distanceKm, 0.1))
         .frame(height: 140)
         .terminalCard()
     }
@@ -183,7 +186,7 @@ struct RunDetailView: View {
     private func applyEntry(_ e: RouteCache.Entry) {
         entry = e
         splits = RunMetrics.splits(from: e.locations)
-        elevation = RunMetrics.elevationProfile(from: e.locations)
+        elevation = RunMetrics.elevationSamples(from: e.locations)
     }
 
     private func boundingRegion(for coords: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
@@ -201,6 +204,36 @@ struct RunDetailView: View {
     private func paceLabel(_ secs: Double) -> String {
         let total = Int(secs.rounded())
         return "\(total / 60):\(String(format: "%02d", total % 60))"
+    }
+
+    private func paceSamples(from buckets: [Double]) -> [MetricSample] {
+        guard buckets.count >= 2 else { return [] }
+        let maxDistance = max(run.distanceKm, 0.1)
+        return buckets.enumerated().map { idx, value in
+            let distance = maxDistance * Double(idx) / Double(buckets.count - 1)
+            return MetricSample(distanceKm: distance, value: value)
+        }
+    }
+
+    private func distanceAxisMarks() -> some AxisContent {
+        AxisMarks(values: .automatic(desiredCount: 4)) { value in
+            AxisGridLine().foregroundStyle(theme.comment.opacity(0.18))
+            AxisTick().foregroundStyle(theme.comment.opacity(0.45))
+            AxisValueLabel {
+                if let km = value.as(Double.self) {
+                    Text(distanceLabel(km))
+                        .terminalFont(9)
+                        .foregroundColor(theme.comment)
+                }
+            }
+        }
+    }
+
+    private func distanceLabel(_ km: Double) -> String {
+        if run.distanceKm < 10 {
+            return String(format: "%.1fkm", km)
+        }
+        return "\(Int(km.rounded()))km"
     }
 
     private func formattedTime(_ d: Date) -> String {

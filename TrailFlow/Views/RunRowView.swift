@@ -9,32 +9,63 @@ struct RunRowView: View {
     @State private var loadFailed = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Text("$")
-                    .foregroundColor(theme.green)
-                Text("run --date")
-                    .foregroundColor(theme.fg)
-                Text(run.isoDate)
-                    .foregroundColor(theme.cyan)
-            }
-            .terminalFont(12)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Text("$")
+                        .foregroundColor(theme.green)
+                    Text("run --date")
+                        .foregroundColor(theme.fg)
+                    Text(run.isoDate)
+                        .foregroundColor(theme.cyan)
+                }
+                .terminalFont(12)
 
-            HStack(spacing: 8) {
-                metric(run.formattedDistance, color: theme.fg)
-                dot
-                metric(run.formattedDuration, color: theme.fg)
-                dot
-                metric(run.formattedElevation, color: theme.orange)
-            }
-            .terminalFont(15, weight: .semibold)
+                HStack(spacing: 8) {
+                    metric(run.formattedDistance, color: theme.fg)
+                    dot
+                    metric(run.formattedDuration, color: theme.fg)
+                    dot
+                    metric(run.formattedElevation, color: theme.orange)
+                }
+                .terminalFont(15, weight: .semibold)
 
-            if let entry, entry.paceBuckets.count >= 2 {
-                SparklineView(values: entry.paceBuckets)
+                if let entry, entry.paceBuckets.count >= 2 {
+                    SparklineView(values: entry.paceBuckets, height: 22)
+                }
             }
+
+            Spacer(minLength: 4)
+
+            routeGlyph
         }
         .terminalCard()
         .task(id: run.id) { await loadRoute() }
+    }
+
+    @ViewBuilder private var routeGlyph: some View {
+        if let entry, entry.locations.count >= 2 {
+            RoutePolylineThumbnailView(locations: entry.locations, height: 52)
+                .frame(width: 74)
+                .padding(6)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(theme.darkCard)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(theme.cyan.opacity(0.35), lineWidth: 1)
+                        )
+                )
+        } else {
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(theme.comment.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                .frame(width: 86, height: 64)
+                .overlay {
+                    Text(loadFailed ? "!" : "...")
+                        .terminalFont(11, weight: .bold)
+                        .foregroundColor(loadFailed ? theme.red : theme.comment.opacity(0.6))
+                }
+        }
     }
 
     @ViewBuilder private var dot: some View {

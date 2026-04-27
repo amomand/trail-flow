@@ -77,7 +77,7 @@ final class HealthKitService {
         }
     }
 
-    /// Fetch the route (single HKWorkoutRoute) attached to a workout, then resolve its CLLocations.
+    /// Fetch all route segments attached to a workout, then resolve their CLLocations.
     func fetchRoute(for workout: HKWorkout) async throws -> [CLLocation] {
         let pred = HKQuery.predicateForObjects(from: workout)
         let routes: [HKWorkoutRoute] = try await withCheckedThrowingContinuation { cont in
@@ -87,8 +87,15 @@ final class HealthKitService {
             }
             store.execute(q)
         }
-        guard let route = routes.first else { return [] }
-        return try await locations(for: route)
+
+        var segments: [[CLLocation]] = []
+        for route in routes.sorted(by: { $0.startDate < $1.startDate }) {
+            segments.append(try await locations(for: route))
+        }
+
+        return segments
+            .flatMap { $0 }
+            .sorted { $0.timestamp < $1.timestamp }
     }
 
     private func locations(for route: HKWorkoutRoute) async throws -> [CLLocation] {
