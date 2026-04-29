@@ -41,6 +41,7 @@ struct RunDetailView: View {
         }
         .navigationTitle(run.formattedDateHeader)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(theme.bg, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .task(id: run.id) { await load() }

@@ -104,7 +104,7 @@ enum RunMetrics {
         return splits
     }
 
-    /// Elevation in metres sampled along the route with distance for plotting.
+    /// Elevation values in metres sampled along the route.
     static func elevationProfile(from locations: [CLLocation], count: Int = 64) -> [Double] {
         elevationSamples(from: locations, count: count).map(\.value)
     }

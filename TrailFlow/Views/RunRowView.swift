@@ -57,13 +57,16 @@ struct RunRowView: View {
                         )
                 )
         } else {
+            let label = loadFailed ? "!" : (entry == nil ? "..." : "--")
+            let color = loadFailed ? theme.red : theme.comment.opacity(0.6)
+
             RoundedRectangle(cornerRadius: 4)
                 .stroke(theme.comment.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                 .frame(width: 86, height: 64)
                 .overlay {
-                    Text(loadFailed ? "!" : "...")
+                    Text(label)
                         .terminalFont(11, weight: .bold)
-                        .foregroundColor(loadFailed ? theme.red : theme.comment.opacity(0.6))
+                        .foregroundColor(color)
                 }
         }
     }
