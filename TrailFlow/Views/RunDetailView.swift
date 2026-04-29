@@ -213,7 +213,7 @@ struct RunDetailView: View {
 
     private func paceSamples(from buckets: [Double]) -> [MetricSample] {
         guard buckets.count >= 2 else { return [] }
-        let maxDistance = max(routeDistanceKm, run.distanceKm, 0.1)
+        let maxDistance = max(routeDistanceKm > 0 ? routeDistanceKm : run.distanceKm, 0.1)
         return buckets.enumerated().map { idx, value in
             let distance = maxDistance * Double(idx) / Double(buckets.count - 1)
             return MetricSample(id: idx, distanceKm: distance, value: value)
