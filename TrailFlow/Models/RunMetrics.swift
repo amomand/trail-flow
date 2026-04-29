@@ -17,10 +17,9 @@ struct Split: Identifiable {
 }
 
 struct MetricSample: Identifiable {
+    let id: Int
     let distanceKm: Double
     let value: Double
-
-    var id: Double { distanceKm }
 }
 
 enum RunMetrics {
@@ -110,16 +109,25 @@ enum RunMetrics {
         elevationSamples(from: locations, count: count).map(\.value)
     }
 
+    static func totalDistanceKm(from locations: [CLLocation]) -> Double {
+        guard locations.count >= 2 else { return 0 }
+        var cumDist = 0.0
+        for i in 1..<locations.count {
+            cumDist += locations[i].distance(from: locations[i - 1])
+        }
+        return cumDist / 1000.0
+    }
+
     static func elevationSamples(from locations: [CLLocation], count: Int = 64) -> [MetricSample] {
         guard locations.count >= 2 else { return [] }
         let step = max(1, locations.count / count)
         var cumDist = 0.0
-        var samples: [MetricSample] = [MetricSample(distanceKm: 0, value: locations[0].altitude)]
+        var samples: [MetricSample] = [MetricSample(id: 0, distanceKm: 0, value: locations[0].altitude)]
 
         for i in 1..<locations.count {
             cumDist += locations[i].distance(from: locations[i - 1])
             if i % step == 0 || i == locations.count - 1 {
-                samples.append(MetricSample(distanceKm: cumDist / 1000.0, value: locations[i].altitude))
+                samples.append(MetricSample(id: samples.count, distanceKm: cumDist / 1000.0, value: locations[i].altitude))
             }
         }
         return samples

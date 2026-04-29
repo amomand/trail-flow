@@ -28,7 +28,10 @@ final class SyncCoordinator {
         do {
             let context = modelContainer.mainContext
             // Query from the selected start date so widening the range backfills older runs.
-            let descriptor = FetchDescriptor<Run>(sortBy: [SortDescriptor(\.startDate, order: .reverse)])
+            let descriptor = FetchDescriptor<Run>(
+                predicate: #Predicate<Run> { $0.startDate >= startDate },
+                sortBy: [SortDescriptor(\.startDate, order: .reverse)]
+            )
             let existing = (try? context.fetch(descriptor)) ?? []
             let existingIds = Set(existing.map { $0.id })
 

@@ -10,6 +10,7 @@ struct RunDetailView: View {
     @State private var entry: RouteCache.Entry?
     @State private var splits: [Split] = []
     @State private var elevation: [MetricSample] = []
+    @State private var routeDistanceKm = 0.0
 
     var body: some View {
         ZStack {
@@ -80,6 +81,7 @@ struct RunDetailView: View {
 
     private func paceChart(buckets: [Double]) -> some View {
         let samples = paceSamples(from: buckets)
+        let domainEnd = chartDomainEnd(for: samples)
         return Chart {
             ForEach(samples) { sample in
                 LineMark(x: .value("km", sample.distanceKm), y: .value("pace", sample.value))
@@ -97,13 +99,14 @@ struct RunDetailView: View {
             }
         }
         .chartXAxis { distanceAxisMarks() }
-        .chartXScale(domain: 0...max(run.distanceKm, 0.1))
+        .chartXScale(domain: 0...domainEnd)
         .frame(height: 140)
         .terminalCard()
     }
 
     private func elevationChart(samples: [MetricSample]) -> some View {
-        Chart {
+        let domainEnd = chartDomainEnd(for: samples)
+        return Chart {
             ForEach(samples) { sample in
                 AreaMark(x: .value("km", sample.distanceKm), y: .value("alt", sample.value))
                     .foregroundStyle(theme.orange.opacity(0.4))
@@ -122,7 +125,7 @@ struct RunDetailView: View {
             }
         }
         .chartXAxis { distanceAxisMarks() }
-        .chartXScale(domain: 0...max(run.distanceKm, 0.1))
+        .chartXScale(domain: 0...domainEnd)
         .frame(height: 140)
         .terminalCard()
     }
@@ -187,6 +190,7 @@ struct RunDetailView: View {
         entry = e
         splits = RunMetrics.splits(from: e.locations)
         elevation = RunMetrics.elevationSamples(from: e.locations)
+        routeDistanceKm = RunMetrics.totalDistanceKm(from: e.locations)
     }
 
     private func boundingRegion(for coords: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
@@ -208,11 +212,15 @@ struct RunDetailView: View {
 
     private func paceSamples(from buckets: [Double]) -> [MetricSample] {
         guard buckets.count >= 2 else { return [] }
-        let maxDistance = max(run.distanceKm, 0.1)
+        let maxDistance = max(routeDistanceKm, run.distanceKm, 0.1)
         return buckets.enumerated().map { idx, value in
             let distance = maxDistance * Double(idx) / Double(buckets.count - 1)
-            return MetricSample(distanceKm: distance, value: value)
+            return MetricSample(id: idx, distanceKm: distance, value: value)
         }
+    }
+
+    private func chartDomainEnd(for samples: [MetricSample]) -> Double {
+        max(samples.last?.distanceKm ?? routeDistanceKm, 0.1)
     }
 
     private func distanceAxisMarks() -> some AxisContent {

@@ -10,23 +10,24 @@ struct RunListView: View {
     @State private var showSettings = false
 
     var body: some View {
-        NavigationStack {
+        let displayedRuns = visibleRuns
+        return NavigationStack {
             ZStack {
                 theme.bg.ignoresSafeArea()
                 VStack(alignment: .leading, spacing: 0) {
-                    header
+                    header(runCount: displayedRuns.count)
 
                     Divider()
                         .background(theme.comment.opacity(0.3))
                         .padding(.vertical, 12)
 
-                    if visibleRuns.isEmpty {
+                    if displayedRuns.isEmpty {
                         EmptyStateView(syncState: coordinator.state, onRetry: refresh)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         ScrollView {
                             LazyVStack(spacing: 10) {
-                                ForEach(visibleRuns) { run in
+                                ForEach(displayedRuns) { run in
                                     NavigationLink {
                                         RunDetailView(run: run)
                                     } label: {
@@ -56,14 +57,14 @@ struct RunListView: View {
         runs.filter { $0.startDate >= settings.startDate }
     }
 
-    private var header: some View {
+    private func header(runCount: Int) -> some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("// TRAILFLOW")
                     .terminalFont(22, weight: .bold)
                     .foregroundColor(theme.cyan)
                 HStack(spacing: 6) {
-                    Text("\(visibleRuns.count) runs")
+                    Text("\(runCount) runs")
                         .foregroundColor(theme.comment)
                     Text("since")
                         .foregroundColor(theme.comment.opacity(0.75))
@@ -102,9 +103,7 @@ struct RunListView: View {
     }
 
     private func shortDate(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "d MMM yyyy"
-        return f.string(from: date)
+        date.formatted(.dateTime.day().month(.abbreviated).year())
     }
 }
 
@@ -128,6 +127,8 @@ private struct EmptyStateView: View {
                     .terminalFont(12)
                     .foregroundColor(theme.red)
                     .multilineTextAlignment(.center)
+                Button("[ retry ]", action: onRetry)
+                    .buttonStyle(TerminalButtonStyle(color: theme.cyan))
             case .idle:
                 Text("// no runs found since your start date")
                     .terminalFont(12)
