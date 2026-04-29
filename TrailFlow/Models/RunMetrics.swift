@@ -16,6 +16,12 @@ struct Split: Identifiable {
     }
 }
 
+struct MetricSample: Identifiable {
+    let id: Int
+    let distanceKm: Double
+    let value: Double
+}
+
 enum RunMetrics {
     /// Bucket the route into `count` evenly-distance-spaced pace samples (sec/km).
     static func paceBuckets(from locations: [CLLocation], count: Int = 32) -> [Double] {
@@ -53,36 +59,78 @@ enum RunMetrics {
     static func splits(from locations: [CLLocation]) -> [Split] {
         guard locations.count >= 2 else { return [] }
         var splits: [Split] = []
-        var lastKmIndex = 0
-        var lastTimestamp = locations.first!.timestamp
-        var lastAltitude = locations.first!.altitude
+        var nextKmIndex = 1
+        var splitStartTime = locations.first!.timestamp
         var elevAccum = 0.0
         var cumDist = 0.0
 
         for i in 1..<locations.count {
-            cumDist += locations[i].distance(from: locations[i-1])
-            let dAlt = locations[i].altitude - lastAltitude
-            if dAlt > 0 { elevAccum += dAlt }
-            lastAltitude = locations[i].altitude
+            let previous = locations[i - 1]
+            let current = locations[i]
+            let segmentStartDist = cumDist
+            let segmentDistance = current.distance(from: previous)
+            guard segmentDistance > 0 else { continue }
 
-            let kmCount = Int(cumDist / 1000.0)
-            if kmCount > lastKmIndex {
-                let kmIdx = kmCount
-                let dt = locations[i].timestamp.timeIntervalSince(lastTimestamp)
-                splits.append(Split(kmIndex: kmIdx, durationSeconds: dt, elevationGainMetres: elevAccum))
-                lastKmIndex = kmIdx
-                lastTimestamp = locations[i].timestamp
+            let segmentEndDist = segmentStartDist + segmentDistance
+            let segmentDuration = current.timestamp.timeIntervalSince(previous.timestamp)
+            let segmentAltitudeDelta = current.altitude - previous.altitude
+            var localStartDist = segmentStartDist
+            var localStartAltitude = previous.altitude
+
+            while Double(nextKmIndex) * 1000.0 <= segmentEndDist {
+                let boundaryDist = Double(nextKmIndex) * 1000.0
+                let fraction = (boundaryDist - segmentStartDist) / segmentDistance
+                let boundaryTime = previous.timestamp.addingTimeInterval(segmentDuration * fraction)
+                let boundaryAltitude = previous.altitude + segmentAltitudeDelta * fraction
+                let altitudeDelta = boundaryAltitude - localStartAltitude
+                if altitudeDelta > 0 { elevAccum += altitudeDelta }
+
+                let dt = boundaryTime.timeIntervalSince(splitStartTime)
+                splits.append(Split(kmIndex: nextKmIndex, durationSeconds: dt, elevationGainMetres: elevAccum))
+
+                nextKmIndex += 1
+                splitStartTime = boundaryTime
                 elevAccum = 0
+                localStartDist = boundaryDist
+                localStartAltitude = boundaryAltitude
             }
+
+            let remainingAltitudeDelta = current.altitude - localStartAltitude
+            if segmentEndDist > localStartDist, remainingAltitudeDelta > 0 {
+                elevAccum += remainingAltitudeDelta
+            }
+            cumDist = segmentEndDist
         }
         return splits
     }
 
-    /// Elevation in metres sampled along the route, normalised by index for plotting.
+    /// Elevation values in metres sampled along the route.
     static func elevationProfile(from locations: [CLLocation], count: Int = 64) -> [Double] {
+        elevationSamples(from: locations, count: count).map(\.value)
+    }
+
+    static func totalDistanceKm(from locations: [CLLocation]) -> Double {
+        guard locations.count >= 2 else { return 0 }
+        var cumDist = 0.0
+        for i in 1..<locations.count {
+            cumDist += locations[i].distance(from: locations[i - 1])
+        }
+        return cumDist / 1000.0
+    }
+
+    static func elevationSamples(from locations: [CLLocation], count: Int = 64) -> [MetricSample] {
         guard locations.count >= 2 else { return [] }
         let step = max(1, locations.count / count)
-        return stride(from: 0, to: locations.count, by: step).map { locations[$0].altitude }
+        var cumDist = 0.0
+        var samples: [MetricSample] = [MetricSample(id: 0, distanceKm: 0, value: locations[0].altitude)]
+
+        for i in 1..<locations.count {
+            cumDist += locations[i].distance(from: locations[i - 1])
+            if i % step == 0 || i == locations.count - 1 {
+                samples.append(MetricSample(id: samples.count, distanceKm: cumDist / 1000.0, value: locations[i].altitude))
+            }
+        }
+        return samples
     }
 
     private static func interpolate(target: Double, xs: [Double], ys: [Double]) -> Double {

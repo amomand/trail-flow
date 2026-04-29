@@ -24,17 +24,18 @@ final class SyncCoordinator {
     func sync(startDate: Date) async {
         guard state != .syncing else { return }
         state = .syncing
-        defer { state = .idle }
 
         do {
             let context = modelContainer.mainContext
-            // Determine watermark: latest stored startDate, or user start date.
-            let descriptor = FetchDescriptor<Run>(sortBy: [SortDescriptor(\.startDate, order: .reverse)])
+            // Query from the selected start date so widening the range backfills older runs.
+            let descriptor = FetchDescriptor<Run>(
+                predicate: #Predicate<Run> { $0.startDate >= startDate },
+                sortBy: [SortDescriptor(\.startDate, order: .reverse)]
+            )
             let existing = (try? context.fetch(descriptor)) ?? []
             let existingIds = Set(existing.map { $0.id })
-            let watermark = max(existing.first?.startDate ?? .distantPast, startDate)
 
-            let workouts = try await hk.fetchRunningWorkouts(since: watermark)
+            let workouts = try await hk.fetchRunningWorkouts(since: startDate)
             for w in workouts {
                 if existingIds.contains(w.uuid) { continue }
                 let run = Run(
@@ -51,6 +52,7 @@ final class SyncCoordinator {
             }
             try context.save()
             lastSyncedAt = Date()
+            state = .idle
         } catch {
             state = .error(error.localizedDescription)
         }

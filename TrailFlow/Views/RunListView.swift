@@ -3,7 +3,6 @@ import SwiftData
 
 struct RunListView: View {
     @Environment(\.theme) private var theme
-    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Run.startDate, order: .reverse) private var runs: [Run]
 
     let settings: AppSettings
@@ -11,40 +10,40 @@ struct RunListView: View {
     @State private var showSettings = false
 
     var body: some View {
-        NavigationStack {
+        let displayedRuns = visibleRuns
+        return NavigationStack {
             ZStack {
                 theme.bg.ignoresSafeArea()
-                if runs.isEmpty {
-                    EmptyStateView(syncState: coordinator.state, onRetry: refresh)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(runs) { run in
-                                NavigationLink {
-                                    RunDetailView(run: run)
-                                } label: {
-                                    RunRowView(run: run)
+                VStack(alignment: .leading, spacing: 0) {
+                    header(runCount: displayedRuns.count)
+
+                    Divider()
+                        .background(theme.comment.opacity(0.3))
+                        .padding(.vertical, 12)
+
+                    if displayedRuns.isEmpty {
+                        EmptyStateView(syncState: coordinator.state, onRetry: refresh)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 10) {
+                                ForEach(displayedRuns) { run in
+                                    NavigationLink {
+                                        RunDetailView(run: run)
+                                    } label: {
+                                        RunRowView(run: run)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 16)
                         }
-                        .padding(16)
-                    }
-                    .refreshable { await coordinator.sync(startDate: settings.startDate) }
-                }
-            }
-            .navigationTitle("trail-flow")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .foregroundColor(theme.cyan)
+                        .refreshable { await coordinator.sync(startDate: settings.startDate) }
                     }
                 }
             }
+            .toolbar(.hidden, for: .navigationBar)
             .toolbarBackground(theme.bg, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .sheet(isPresented: $showSettings) {
@@ -54,8 +53,57 @@ struct RunListView: View {
         }
     }
 
+    private var visibleRuns: [Run] {
+        runs.filter { $0.startDate >= settings.startDate }
+    }
+
+    private func header(runCount: Int) -> some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("// TRAILFLOW")
+                    .terminalFont(22, weight: .bold)
+                    .foregroundColor(theme.cyan)
+                HStack(spacing: 6) {
+                    Text("\(runCount) runs")
+                        .foregroundColor(theme.comment)
+                    Text("since")
+                        .foregroundColor(theme.comment.opacity(0.75))
+                    Text(shortDate(settings.startDate))
+                        .foregroundColor(theme.orange)
+                }
+                .terminalFont(12)
+            }
+
+            Spacer()
+
+            Button {
+                showSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 17, weight: .bold, design: .monospaced))
+                    .foregroundColor(theme.cyan)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(theme.darkCard)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(theme.comment.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
     private func refresh() {
         Task { await coordinator.sync(startDate: settings.startDate) }
+    }
+
+    private func shortDate(_ date: Date) -> String {
+        date.formatted(.dateTime.day().month(.abbreviated).year())
     }
 }
 
@@ -79,6 +127,8 @@ private struct EmptyStateView: View {
                     .terminalFont(12)
                     .foregroundColor(theme.red)
                     .multilineTextAlignment(.center)
+                Button("[ retry ]", action: onRetry)
+                    .buttonStyle(TerminalButtonStyle(color: theme.cyan))
             case .idle:
                 Text("// no runs found since your start date")
                     .terminalFont(12)
